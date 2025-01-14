@@ -33,6 +33,13 @@ async function run() {
   try {
     // collection
     const usersCollection = client.db("UsersDB").collection("users");
+    // find multiple user
+    app.get("/allUsers", async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
+
+    // find one user api
     app.get("/users", async (req, res) => {
       let query = {};
       if (req.query.email) {
@@ -63,6 +70,16 @@ async function run() {
       const result = await usersCollection.insertOne(userDocs);
       res.send(result);
     });
+
+    // jwt token
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.SECRET_ACCESS_TOKEN, {
+        expiresIn: "2h",
+      });
+      res.send({ success: true, token });
+    });
+
     // Send a ping to confirm a successful connection
   } finally {
     // Ensures that the client will close when you finish/error
