@@ -166,6 +166,8 @@ async function run() {
       res.send(result);
     });
 
+    // task details patch api
+
     // delete api
 
     // user delete api
@@ -173,6 +175,14 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // task delete api
+    app.delete("/taskDelete/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await TasksCollection.deleteOne(query);
       res.send(result);
     });
 
