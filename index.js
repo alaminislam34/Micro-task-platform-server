@@ -4,7 +4,7 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const app = express();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 app.use(
   cors({
@@ -54,21 +54,27 @@ async function run() {
       }
     });
 
+    // post user api
     app.post("/user", async (req, res) => {
       const { name, email, photo, role, coins } = req.body;
       console.table({ name, email, photo, role, coins });
-      const userDocs = { name, email, photo, role: role, coins };
+      const userDocs = {
+        name,
+        email,
+        photo,
+        role: role,
+        coins: role === "Worker" ? 10 : role === "Buyer" && 50,
+      };
       const query = {
         email: email,
       };
       const exist = await usersCollection.findOne(query);
       if (exist) {
-        return res
-          .status(403)
-          .statusMessage("Forbidden Access. User already exists");
+        res.status(403).statusMessage("Forbidden Access. User already exists");
+      } else {
+        const result = await usersCollection.insertOne(userDocs);
+        res.send(result);
       }
-      const result = await usersCollection.insertOne(userDocs);
-      res.send(result);
     });
 
     // jwt token
@@ -78,6 +84,27 @@ async function run() {
         expiresIn: "2h",
       });
       res.send({ success: true, token });
+    });
+
+    // modify api
+    app.patch("/deleteUser/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updatedRole = req.body.value;
+      console.log(id, updatedRole);
+      const updatedDocs = { $set: { role: updatedRole } };
+      const result = await usersCollection.updateOne(query, updatedDocs);
+      res.send(result);
+    });
+
+    // delete api
+
+    // user delete api
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await usersCollection.deleteOne(query);
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
