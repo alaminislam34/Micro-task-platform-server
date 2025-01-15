@@ -10,13 +10,36 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://homerepairservicesbd.web.app",
-      "https://homerepairservicesbd.firebaseapp.com",
+      "https://workflow-bd.web.app",
+      "https://workflow-bd.firebaseapp.com",
     ],
     credentials: true,
   })
 );
 app.use(express.json());
+app.use(
+  cors({
+    origin: ["http://localhost:5173/"],
+    credentials: true,
+  })
+);
+
+// token verify
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Access Denied" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, "your-secret-key");
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(403).json({ message: "Invalid or Expired Token" });
+  }
+};
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nu6ig.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -33,9 +56,46 @@ async function run() {
   try {
     // collection
     const usersCollection = client.db("UsersDB").collection("users");
+    const TasksCollection = client.db("TasksDB").collection("Tasks");
     // find multiple user
     app.get("/allUsers", async (req, res) => {
       const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
+
+    // get task api
+    // app.get("/buyerTasks", async (req, res) => {
+    //   const email = req.query.email;
+
+    //   // Log the inputs for debugging
+    //   console.log("Query Email:", email);
+    //   console.log("Decoded User Email:", req.user?.email);
+
+    //   if (req.user?.email === email) {
+    //     try {
+    //       const query = { buyer_email: email };
+    //       const result = await TasksCollection.find(query).toArray();
+    //       res.send(result);
+    //     } catch (error) {
+    //       console.error("Database Error:", error);
+    //       res.status(500).send({ message: "Server Error" });
+    //     }
+    //   } else {
+    //     return res
+    //       .status(403)
+    //       .send({ message: "Unauthorized or Email Mismatch" });
+    //   }
+    // });
+    app.get("/buyerTasks", async (req, res) => {
+      const email = req.query.email;
+      const query = { buyer_email: email };
+      const result = await TasksCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // get all task api
+    app.get("/tasks", async (req, res) => {
+      const result = await TasksCollection.find().toArray();
       res.send(result);
     });
 
@@ -70,11 +130,20 @@ async function run() {
       };
       const exist = await usersCollection.findOne(query);
       if (exist) {
-        res.status(403).statusMessage("Forbidden Access. User already exists");
+        return res
+          .status(403)
+          .statusMessage("Forbidden Access. User already exists");
       } else {
         const result = await usersCollection.insertOne(userDocs);
         res.send(result);
       }
+    });
+
+    // task post api
+    app.post("/tasks", async (req, res) => {
+      const task = req.body;
+      const result = await TasksCollection.insertOne(task);
+      res.send(result);
     });
 
     // jwt token
