@@ -6,23 +6,28 @@ const app = express();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://workflow-bd.web.app",
+  "https://workflow-bd.firebaseapp.com",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://workflow-bd.web.app",
-      "https://workflow-bd.firebaseapp.com",
-    ],
+    origin: function (origin, callback) {
+      if (allowedOrigins.includes(origin) || !origin) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   })
 );
+
+app.options("*", cors()); // Preflight Request Handler
 app.use(express.json());
-app.use(
-  cors({
-    origin: ["http://localhost:5173/"],
-    credentials: true,
-  })
-);
+app.use(express.urlencoded({ extended: true }));
 
 // token verify
 const verifyToken = (req, res, next) => {
@@ -57,10 +62,23 @@ async function run() {
     // collection
     const usersCollection = client.db("UsersDB").collection("users");
     const TasksCollection = client.db("TasksDB").collection("Tasks");
+
     // find multiple user
     app.get("/allUsers", async (req, res) => {
-      const result = await usersCollection.find().toArray();
-      res.send(result);
+      try {
+        const role = req.query.role;
+
+        let query = {};
+        if (role) {
+          query = { role: role };
+        }
+
+        const result = await usersCollection.find(query).toArray();
+        res.status(200).json(result);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
     });
 
     // get task api
@@ -167,7 +185,21 @@ async function run() {
     });
 
     // task details patch api
-
+    app.patch("/updateTask/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const { task_title, task_detail, submission_info } = req.body.updatedData;
+      console.table({ task_title, task_detail, submission_info });
+      const updated = {
+        $set: {
+          task_title: task_title,
+          task_detail: task_detail,
+          submission_info: submission_info,
+        },
+      };
+      const result = await TasksCollection.updateOne(query, updated);
+      res.send(result);
+    });
     // delete api
 
     // user delete api
