@@ -117,6 +117,14 @@ async function run() {
       res.send(result);
     });
 
+    // get id base task api
+    app.get("/tasks/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await TasksCollection.findOne(query);
+      res.send(result);
+    });
+
     // find one user api
     app.get("/users", async (req, res) => {
       let query = {};
@@ -171,6 +179,16 @@ async function run() {
         expiresIn: "2h",
       });
       res.send({ success: true, token });
+    });
+
+    // user coin modify api
+    app.patch("/coinModify", async (req, res) => {
+      const { email, newCoin } = req.body;
+      console.table({ email, newCoin });
+      const query = { email: email };
+      const updateCoin = { $set: { coins: newCoin } };
+      const result = await usersCollection.updateOne(query, updateCoin);
+      res.send(result);
     });
 
     // modify api
