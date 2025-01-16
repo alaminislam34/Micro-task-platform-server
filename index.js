@@ -38,7 +38,7 @@ const verifyToken = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, "your-secret-key");
+    const decoded = jwt.verify(token, process.env.SECRET_ACCESS_TOKEN);
     req.user = decoded;
     next();
   } catch (error) {
@@ -62,9 +62,12 @@ async function run() {
     // collection
     const usersCollection = client.db("UsersDB").collection("users");
     const TasksCollection = client.db("TasksDB").collection("Tasks");
+    const submissionCollection = client
+      .db("SubmissionDB")
+      .collection("Submissions");
 
     // find multiple user
-    app.get("/allUsers", async (req, res) => {
+    app.get("/allUsers", verifyToken, async (req, res) => {
       try {
         const role = req.query.role;
 
@@ -104,7 +107,7 @@ async function run() {
     //       .send({ message: "Unauthorized or Email Mismatch" });
     //   }
     // });
-    app.get("/buyerTasks", async (req, res) => {
+    app.get("/buyerTasks", verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = { buyer_email: email };
       const result = await TasksCollection.find(query).toArray();
@@ -112,13 +115,13 @@ async function run() {
     });
 
     // get all task api
-    app.get("/tasks", async (req, res) => {
+    app.get("/tasks", verifyToken, async (req, res) => {
       const result = await TasksCollection.find().toArray();
       res.send(result);
     });
 
     // get id base task api
-    app.get("/tasks/:id", async (req, res) => {
+    app.get("/tasks/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await TasksCollection.findOne(query);
@@ -126,7 +129,7 @@ async function run() {
     });
 
     // find one user api
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, async (req, res) => {
       let query = {};
       if (req.query.email) {
         query = { email: req.query.email };
@@ -138,6 +141,22 @@ async function run() {
         console.error(error);
         res.status(500).send({ error: "Internal Server Error" });
       }
+    });
+
+    // submission task get api
+    app.get("/submissions", verifyToken, async (req, res) => {
+      const b_email = req.query.b_email;
+      const w_email = req.query.w_email;
+      const query = {};
+
+      if (b_email) {
+        query.buyer_email = b_email;
+      }
+      if (w_email) {
+        query.worker_email = w_email;
+      }
+      const result = await submissionCollection.find(query).toArray();
+      res.send(result);
     });
 
     // post user api
@@ -166,7 +185,7 @@ async function run() {
     });
 
     // task post api
-    app.post("/tasks", async (req, res) => {
+    app.post("/tasks", verifyToken, async (req, res) => {
       const task = req.body;
       const result = await TasksCollection.insertOne(task);
       res.send(result);
@@ -181,8 +200,38 @@ async function run() {
       res.send({ success: true, token });
     });
 
+    // post submission api
+    app.post("/submissions", verifyToken, async (req, res) => {
+      const {
+        task_id,
+        task_title,
+        payable_amount,
+        worker_email,
+        worker_name,
+        buyer_email,
+        buyer_name,
+        submission_details,
+        current_date,
+        status,
+      } = req.body;
+      const newSubmission = {
+        task_id,
+        task_title,
+        payable_amount,
+        worker_email,
+        worker_name,
+        buyer_email,
+        buyer_name,
+        submission_details,
+        current_date,
+        status,
+      };
+      const result = await submissionCollection.insertOne(newSubmission);
+      res.send(result);
+    });
+
     // user coin modify api
-    app.patch("/coinModify", async (req, res) => {
+    app.patch("/coinModify", verifyToken, async (req, res) => {
       const { email, newCoin } = req.body;
       console.table({ email, newCoin });
       const query = { email: email };
@@ -192,7 +241,7 @@ async function run() {
     });
 
     // modify api
-    app.patch("/deleteUser/:id", async (req, res) => {
+    app.patch("/deleteUser/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const updatedRole = req.body.value;
@@ -203,7 +252,7 @@ async function run() {
     });
 
     // task details patch api
-    app.patch("/updateTask/:id", async (req, res) => {
+    app.patch("/updateTask/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const { task_title, task_detail, submission_info } = req.body.updatedData;
@@ -218,10 +267,78 @@ async function run() {
       const result = await TasksCollection.updateOne(query, updated);
       res.send(result);
     });
+
+    // submission approve api
+    app.patch("/approveSubmission/:id", async (req, res) => {
+      const submissionId = req.params.id;
+      const { task_id, amount } = req.body;
+
+      try {
+        // Validate Input
+        if (!submissionId || !workerId || !amount) {
+          return res.status(400).send({ message: "Invalid data provided" });
+        }
+
+        // Find the submission
+        const submission = await submissionCollection.findOne({
+          _id: new ObjectId(submissionId),
+        });
+
+        if (!submission) {
+          return res.status(404).send({ message: "Submission not found" });
+        }
+
+        if (submission.status === "approve") {
+          return res
+            .status(400)
+            .send({ message: "Submission already approved" });
+        }
+
+        // Update worker's coin balance
+        const workerUpdateResult = await workersCollection.updateOne(
+          { _id: new ObjectId(workerId) },
+          { $inc: { coins: amount } } // Increment coins by the payable amount
+        );
+
+        if (workerUpdateResult.modifiedCount === 0) {
+          return res.status(404).send({ message: "Worker not found" });
+        }
+
+        // Update submission status to "approve"
+        const submissionUpdateResult = await submissionCollection.updateOne(
+          { _id: new ObjectId(submissionId) },
+          { $set: { status: "approve" } }
+        );
+
+        if (submissionUpdateResult.modifiedCount === 0) {
+          return res
+            .status(500)
+            .send({ message: "Failed to update submission status" });
+        }
+
+        res.send({
+          success: true,
+          message: "Submission approved successfully",
+        });
+      } catch (error) {
+        console.error("Error in approving submission:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+    // required worker update api
+    app.patch("/updateRequiredWorkers/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const { remainingWorkers } = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updateWorkers = { $set: { required_workers: remainingWorkers } };
+      const result = await TasksCollection.updateOne(query, updateWorkers);
+      res.send(result);
+    });
+
     // delete api
 
     // user delete api
-    app.delete("/users/:id", async (req, res) => {
+    app.delete("/users/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
@@ -229,7 +346,7 @@ async function run() {
     });
 
     // task delete api
-    app.delete("/taskDelete/:id", async (req, res) => {
+    app.delete("/taskDelete/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await TasksCollection.deleteOne(query);
