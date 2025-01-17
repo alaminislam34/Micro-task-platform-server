@@ -241,7 +241,7 @@ async function run() {
     });
 
     // modify api
-    app.patch("/deleteUser/:id", verifyToken, async (req, res) => {
+    app.patch("/updateUserRole/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const updatedRole = req.body.value;
@@ -268,63 +268,6 @@ async function run() {
       res.send(result);
     });
 
-    // submission approve api
-    app.patch("/approveSubmission/:id", async (req, res) => {
-      const submissionId = req.params.id;
-      const { task_id, amount } = req.body;
-
-      try {
-        // Validate Input
-        if (!submissionId || !workerId || !amount) {
-          return res.status(400).send({ message: "Invalid data provided" });
-        }
-
-        // Find the submission
-        const submission = await submissionCollection.findOne({
-          _id: new ObjectId(submissionId),
-        });
-
-        if (!submission) {
-          return res.status(404).send({ message: "Submission not found" });
-        }
-
-        if (submission.status === "approve") {
-          return res
-            .status(400)
-            .send({ message: "Submission already approved" });
-        }
-
-        // Update worker's coin balance
-        const workerUpdateResult = await workersCollection.updateOne(
-          { _id: new ObjectId(workerId) },
-          { $inc: { coins: amount } } // Increment coins by the payable amount
-        );
-
-        if (workerUpdateResult.modifiedCount === 0) {
-          return res.status(404).send({ message: "Worker not found" });
-        }
-
-        // Update submission status to "approve"
-        const submissionUpdateResult = await submissionCollection.updateOne(
-          { _id: new ObjectId(submissionId) },
-          { $set: { status: "approve" } }
-        );
-
-        if (submissionUpdateResult.modifiedCount === 0) {
-          return res
-            .status(500)
-            .send({ message: "Failed to update submission status" });
-        }
-
-        res.send({
-          success: true,
-          message: "Submission approved successfully",
-        });
-      } catch (error) {
-        console.error("Error in approving submission:", error);
-        res.status(500).send({ message: "Internal Server Error" });
-      }
-    });
     // required worker update api
     app.patch("/updateRequiredWorkers/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
@@ -333,6 +276,49 @@ async function run() {
       const updateWorkers = { $set: { required_workers: remainingWorkers } };
       const result = await TasksCollection.updateOne(query, updateWorkers);
       res.send(result);
+    });
+
+    // submission approve api
+    app.patch("/approveSubmission/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const { workerEmail } = req.body;
+
+      const query = { _id: new ObjectId(id) };
+      const updateStatus = { $set: { status: "approved" } };
+
+      // Update the submission status to 'approved'
+      const result = await submissionCollection.updateOne(query, updateStatus);
+
+      // Check if the status update was successful
+      if (result.modifiedCount > 0) {
+        // Get the updated submission details
+        const submission = await submissionCollection.findOne(query);
+
+        // Find the worker by their email
+        const workerQuery = { email: workerEmail };
+        const worker = await usersCollection.findOne(workerQuery);
+
+        if (worker) {
+          // Update the worker's coins
+          const updatedCoins =
+            parseInt(worker.coins) + parseInt(submission.payable_amount);
+
+          const updateCoin = {
+            $set: { coins: updatedCoins },
+          };
+
+          // Update the worker's coin balance in the database
+          await usersCollection.updateOne(workerQuery, updateCoin);
+
+          res
+            .status(200)
+            .send({ message: "Submission approved and coins updated." });
+        } else {
+          res.status(404).send({ message: "Worker not found." });
+        }
+      } else {
+        res.status(400).send({ message: "Failed to approve submission." });
+      }
     });
 
     // delete api
