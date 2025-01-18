@@ -150,10 +150,33 @@ async function run() {
 
     // get notification api
     app.get("/notifications", verifyToken, async (req, res) => {
-      const { email } = req.body;
-      const query = { toEmail: email };
-      const result = await notificationCollection.find(query).toArray();
-      res.send(result);
+      try {
+        const email = req.query.email;
+        console.log("Received email:", email);
+        if (!email) {
+          return res
+            .status(400)
+            .send({ message: "Email query parameter is required" });
+        }
+
+        const query = { toEmail: email };
+        console.log("Query being used:", query);
+
+        const result = await notificationCollection
+          .find(query)
+          .sort({ time: -1 })
+          .toArray();
+
+        if (result.length === 0) {
+          console.log("No notifications found for this email.");
+          return res.status(404).send({ message: "No notifications found." });
+        }
+
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
     });
 
     // post user api
@@ -398,9 +421,8 @@ async function run() {
       if (!ObjectId.isValid(id)) {
         return res.status(400).json({ error: "Invalid ID provided" });
       }
-
       const query = { _id: new ObjectId(id) };
-      const { email, amount } = req.body;
+      const { adminName, workerEmail, email, amount } = req.body;
 
       if (!email || !amount || typeof amount !== "number" || amount <= 0) {
         return res.status(400).json({ error: "Invalid email or amount" });
@@ -421,6 +443,14 @@ async function run() {
 
         const emailQuery = { email: email };
         const worker = await usersCollection.findOne(emailQuery);
+        const message = `Your withdrawal request of $${amount} has been approved by ${adminName}`;
+
+        const notification = {
+          message: message,
+          toEmail: workerEmail,
+          actionRoute: "/dashboard/worker",
+          time: new Date(),
+        };
 
         if (!worker) {
           return res.status(404).json({ error: "User not found" });
@@ -432,6 +462,7 @@ async function run() {
 
         const updateCoin = { $set: { coins: worker.coins - amount } };
         await usersCollection.updateOne(emailQuery, updateCoin);
+        await notificationCollection.insertOne(notification);
 
         return res.status(200).json({
           message: "Withdrawal approved and coins deducted successfully",
