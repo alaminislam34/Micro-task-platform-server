@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const app = express();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -71,6 +72,11 @@ async function run() {
     const notificationCollection = client
       .db("NotificationDB")
       .collection("notifications");
+
+    const paymentHistoryCollection = client
+      .db("PaymentDB")
+      .collection("payments");
+
     // find multiple user
     app.get("/allUsers", async (req, res) => {
       try {
@@ -84,7 +90,6 @@ async function run() {
         const result = await usersCollection.find(query).toArray();
         res.status(200).json(result);
       } catch (error) {
-        console.error("Error fetching users:", error);
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
@@ -121,7 +126,6 @@ async function run() {
         const result = await usersCollection.findOne(query);
         res.send(result);
       } catch (error) {
-        console.error(error);
         res.status(500).send({ error: "Internal Server Error" });
       }
     });
@@ -152,7 +156,6 @@ async function run() {
     app.get("/notifications", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
-        console.log("Received email:", email);
         if (!email) {
           return res
             .status(400)
@@ -160,7 +163,6 @@ async function run() {
         }
 
         const query = { toEmail: email };
-        console.log("Query being used:", query);
 
         const result = await notificationCollection
           .find(query)
@@ -168,13 +170,11 @@ async function run() {
           .toArray();
 
         if (result.length === 0) {
-          console.log("No notifications found for this email.");
           return res.status(404).send({ message: "No notifications found." });
         }
 
         res.status(200).send(result);
       } catch (error) {
-        console.error("Error fetching notifications:", error);
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
@@ -192,7 +192,6 @@ async function run() {
         role: role,
         coins: role === "Worker" ? 10 : role === "Buyer" && 50,
       };
-      console.table(userDocs);
       const query = {
         email: email,
       };
@@ -324,44 +323,7 @@ async function run() {
       res.send(result);
     });
 
-    // submission approve api
-    //     app.patch("/approveSubmission/:id", verifyToken, async (req, res) => {
-    //       const id = req.params.id;
-    //       const { amount, workerEmail, task_title, buyer_name } = req.body;
-    //       console.table({ amount, workerEmail, task_title, buyer_name });
-
-    //       const query = { _id: new ObjectId(id) };
-    //       const updateStatus = { $set: { status: "approved" } };
-    //       const result = await submissionCollection.updateOne(query, updateStatus);
-    //       if (result.modifiedCount > 0) {
-    //         const message = `You have earned ${amount} from ${buyer_name} for completing ${task_title}
-    // `;
-    //         const notification = {
-    //           message: message,
-    //           toEmail: workerEmail,
-    //           actionRoute: "/dashboard/worker",
-    //           time: new Date(),
-    //         };
-    //         const workerQuery = { email: workerEmail };
-    //         const worker = await usersCollection.findOne(workerQuery);
-    //         if (worker) {
-    //           const updatedCoins = parseInt(worker.coins) + parseInt(amount);
-    //           const updateCoin = {
-    //             $set: { coins: updatedCoins },
-    //           };
-    //           await usersCollection.updateOne(workerQuery, updateCoin);
-    //           await notificationCollection.insertOne(notification);
-    //           res
-    //             .status(200)
-    //             .send({ message: "Submission approved and coins updated." });
-    //         } else {
-    //           res.status(404).send({ message: "Worker not found." });
-    //         }
-    //       } else {
-    //         res.status(400).send({ message: "Failed to approve submission." });
-    //       }
-    //     });
-
+    // approve submission api
     app.patch("/approveSubmission/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const { amount, workerEmail, task_title, buyer_name } = req.body;
@@ -379,7 +341,7 @@ async function run() {
           updateStatus
         );
         if (result && result.modifiedCount > 0) {
-          const message = `You have earned ${amount} from ${buyer_name} for completing ${task_title}`;
+          const message = `You have earned ${amount} coins from ${buyer_name} for completing ${task_title}`;
           const notification = {
             message: message,
             toEmail: workerEmail,
@@ -409,7 +371,6 @@ async function run() {
           res.status(400).send({ message: "Failed to approve submission." });
         }
       } catch (error) {
-        console.error(error);
         res.status(500).send({ message: "Server error." });
       }
     });
@@ -443,7 +404,7 @@ async function run() {
 
         const emailQuery = { email: email };
         const worker = await usersCollection.findOne(emailQuery);
-        const message = `Your withdrawal request of $${amount} has been approved by ${adminName}`;
+        const message = `Your withdrawal request of ${amount} coins has been approved by ${adminName}`;
 
         const notification = {
           message: message,
@@ -468,7 +429,6 @@ async function run() {
           message: "Withdrawal approved and coins deducted successfully",
         });
       } catch (error) {
-        console.error("Error approving withdrawal:", error);
         return res.status(500).json({ error: "Internal server error" });
       }
     });
@@ -477,7 +437,7 @@ async function run() {
     app.patch("/rejectSubmission/:id", verifyToken, async (req, res) => {
       try {
         const id = req.params.id;
-        const { taskId } = req.body;
+        const { taskId, taskTitle, buyerName, workerEmail } = req.body;
 
         if (!taskId) {
           return res.status(400).send({ message: "Task ID is required." });
@@ -493,6 +453,14 @@ async function run() {
         if (result.modifiedCount > 0) {
           const taskQuery = { _id: new ObjectId(taskId) };
           const task = await TasksCollection.findOne(taskQuery);
+          const message = `Your submission for the task "${taskTitle}" was rejected by ${buyerName}. Please check the task details or contact the buyer for clarification.`;
+          const notification = {
+            message: message,
+            toEmail: workerEmail,
+            actionRoute: "/dashboard/worker",
+            time: new Date(),
+          };
+          await notificationCollection.insertOne(notification);
 
           if (task) {
             const newWorkerCount = parseInt(task.required_workers) + 1;
@@ -523,7 +491,6 @@ async function run() {
             .send({ message: "Failed to update submission status." });
         }
       } catch (error) {
-        console.error(error);
         return res.status(500).send({ message: "Internal server error." });
       }
     });
@@ -543,6 +510,49 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await TasksCollection.deleteOne(query);
       res.send(result);
+    });
+
+    app.get("/paymentHistory", verifyToken, async (req, res) => {
+      const email = req.query.email;
+      const query = { buyer_email: email };
+      const result = await paymentHistoryCollection.find(query).toArray();
+      res.send(result);
+    });
+    // payment api
+    app.post("/create-payment-intent", async (req, res) => {
+      try {
+        const { coins, price, email } = req.body;
+
+        if (!coins || !price || !email) {
+          return res.status(400).send({ message: "Missing required fields" });
+        }
+
+        const amount = parseInt(price * 100);
+
+        // Create Payment Intent
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+
+        // Save payment info in paymentHistoryCollection
+        const paymentHistory = {
+          buyer_email: email,
+          coins_purchased: coins,
+          amount_paid: price,
+          payment_date: new Date(),
+          transaction_id: paymentIntent.id,
+          payment_status: "Success",
+        };
+        await paymentHistoryCollection.insertOne(paymentHistory);
+
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        res.status(500).send({ message: "Internal server error" });
+      }
     });
 
     // Send a ping to confirm a successful connection
