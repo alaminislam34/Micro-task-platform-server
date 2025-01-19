@@ -438,6 +438,7 @@ async function run() {
       try {
         const id = req.params.id;
         const { taskId, taskTitle, buyerName, workerEmail } = req.body;
+        console.table({ taskId, taskTitle, buyerName, workerEmail });
 
         if (!taskId) {
           return res.status(400).send({ message: "Task ID is required." });
@@ -457,7 +458,7 @@ async function run() {
           const notification = {
             message: message,
             toEmail: workerEmail,
-            actionRoute: "/dashboard/worker",
+            actionRoute: "/dashboard/Worker",
             time: new Date(),
           };
           await notificationCollection.insertOne(notification);
@@ -518,6 +519,13 @@ async function run() {
       const result = await paymentHistoryCollection.find(query).toArray();
       res.send(result);
     });
+
+    app.post("/paymentHistory", verifyToken, async (req, res) => {
+      const notification = req.body;
+      const result = await paymentHistoryCollection.insertOne(notification);
+      res.send(result);
+    });
+
     // payment api
     app.post("/create-payment-intent", async (req, res) => {
       try {
@@ -535,17 +543,6 @@ async function run() {
           currency: "usd",
           payment_method_types: ["card"],
         });
-
-        // Save payment info in paymentHistoryCollection
-        const paymentHistory = {
-          buyer_email: email,
-          coins_purchased: coins,
-          amount_paid: price,
-          payment_date: new Date(),
-          transaction_id: paymentIntent.id,
-          payment_status: "Success",
-        };
-        await paymentHistoryCollection.insertOne(paymentHistory);
 
         res.send({
           clientSecret: paymentIntent.client_secret,
