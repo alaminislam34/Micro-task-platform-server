@@ -102,6 +102,28 @@ async function run() {
     };
 
     // verify buyer
+    const verifyBuyerOrAdmin = async (req, res, next) => {
+      const token = req.headers.authorization?.split(" ")[1];
+
+      if (!token) {
+        return res.status(401).message({ message: "Access Denied" });
+      }
+
+      try {
+        const decoded = jwt.verify(token, process.env.SECRET_ACCESS_TOKEN);
+        req.user = { email: decoded.email };
+
+        const user = await usersCollection.findOne({ email: req.user.email });
+
+        if (!user || (user.role !== "Buyer" && user.role !== "Admin")) {
+          return res.status(403).message({ message: "Buyer Access Required" });
+        }
+
+        next();
+      } catch (error) {
+        res.status(403).message({ message: "Invalid or Expired Token" });
+      }
+    };
     const verifyBuyer = async (req, res, next) => {
       const token = req.headers.authorization?.split(" ")[1];
 
@@ -371,7 +393,7 @@ async function run() {
     app.delete(
       "/taskDelete/:id",
       verifyToken,
-      verifyBuyer,
+      verifyBuyerOrAdmin,
       async (req, res) => {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
