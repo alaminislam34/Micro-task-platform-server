@@ -124,6 +124,9 @@ async function run() {
         res.status(403).message({ message: "Invalid or Expired Token" });
       }
     };
+
+    // verify buyer
+    // ==========================
     const verifyBuyer = async (req, res, next) => {
       const token = req.headers.authorization?.split(" ")[1];
 
@@ -148,23 +151,26 @@ async function run() {
     };
 
     // find multiple user
+    // ==========================
     app.get("/allUsers", async (req, res) => {
+      const { name, role } = req.query;
       try {
-        const role = req.query.role;
-
         let query = {};
         if (role) {
-          query = { role: role };
+          query.role = role;
         }
-
-        const result = await usersCollection.find(query).toArray();
-        res.status(200).json(result);
+        if (name) {
+          query.name = { $regex: name, $options: "i" };
+        }
+        const users = await usersCollection.find(query).toArray();
+        res.send(users);
       } catch (error) {
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
 
     // get task api
+    // ==========================
     app.get("/buyerTasks", verifyBuyer, verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = { buyer_email: email };
@@ -173,13 +179,15 @@ async function run() {
     });
 
     // get all task api
-    app.get("/tasks", verifyToken, async (req, res) => {
+    // ==========================
+    app.get("/tasks", async (req, res) => {
       const result = await TasksCollection.find().toArray();
       res.send(result);
     });
 
     // get id base task api
-    app.get("/tasks/:id", verifyToken, async (req, res) => {
+    // ==========================
+    app.get("/tasks/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await TasksCollection.findOne(query);
@@ -187,6 +195,7 @@ async function run() {
     });
 
     // find one user api
+    // ==========================
     app.get("/users", async (req, res) => {
       let query = {};
       if (req.query.email) {
@@ -201,6 +210,7 @@ async function run() {
     });
 
     // submission task get api
+    // ==========================
     app.get("/submissions", verifyToken, async (req, res) => {
       const b_email = req.query.b_email;
       const w_email = req.query.w_email;
@@ -217,12 +227,14 @@ async function run() {
     });
 
     // withdrawals request get api
+    // ==========================
     app.get("/withdrawRequests", verifyToken, async (req, res) => {
       const result = await withdrawalsCollection.find().toArray();
       res.send(result);
     });
 
     // get notification api
+    // ==========================
     app.get("/notifications", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
@@ -250,6 +262,7 @@ async function run() {
     });
 
     // post user api
+    // ==========================
     app.post("/user", async (req, res) => {
       const { name, email, photo, role } = req.body;
       if (!name && !email && !photo && !role) {
@@ -275,6 +288,7 @@ async function run() {
     });
 
     // task post api done
+    // ==========================
     app.post("/tasks", verifyToken, verifyBuyer, async (req, res) => {
       const task = req.body;
       const result = await TasksCollection.insertOne(task);
@@ -282,6 +296,7 @@ async function run() {
     });
 
     // jwt token
+    // ==========================
     app.post("/jwt", async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.SECRET_ACCESS_TOKEN, {
@@ -291,6 +306,7 @@ async function run() {
     });
 
     // post submission api
+    // ==========================
     app.post("/submissions", verifyToken, async (req, res) => {
       const {
         task_id,
@@ -321,6 +337,7 @@ async function run() {
     });
 
     // withdrawals request api
+    // ==========================
     app.post("/withdrawals", verifyToken, async (req, res) => {
       const { withdrawalData } = req.body;
       const {
@@ -349,6 +366,7 @@ async function run() {
     });
 
     // user coin modify api
+    // ==========================
     app.patch("/coinModify", verifyToken, async (req, res) => {
       const { email, newCoin } = req.body;
       const query = { email: email };
@@ -357,7 +375,8 @@ async function run() {
       res.send(result);
     });
 
-    // modify api
+    // modify a
+    // ==========================
     app.patch(
       "/updateUserRole/:id",
       verifyToken,
@@ -373,6 +392,7 @@ async function run() {
     );
 
     // task details patch api done
+    //  ======================
     app.patch("/updateTask/:id", verifyToken, verifyBuyer, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -385,11 +405,12 @@ async function run() {
         },
       };
       const result = await TasksCollection.updateOne(query, updated);
-      console.log(result);
+
       res.send(result);
     });
 
     // task delete api
+    // ==========================
     app.delete(
       "/taskDelete/:id",
       verifyToken,
@@ -398,12 +419,13 @@ async function run() {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const result = await TasksCollection.deleteOne(query);
-        console.log(result);
+
         res.send(result);
       }
     );
 
     // required worker update api
+    // ==========================
     app.patch("/updateRequiredWorkers/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const { remainingWorkers } = req.body;
@@ -414,6 +436,7 @@ async function run() {
     });
 
     // approve submission api done
+    // ==========================
     app.patch(
       "/approveSubmission/:id",
       verifyToken,
@@ -471,6 +494,7 @@ async function run() {
     );
 
     // withdrawal request approve api
+    // ==========================
     app.patch(
       "/approveWithdrawal/:id",
       verifyAdmin,
@@ -534,6 +558,7 @@ async function run() {
     );
 
     // reject submissions api
+    // ==========================
     app.patch(
       "/rejectSubmission/:id",
       verifyBuyer,
@@ -601,8 +626,53 @@ async function run() {
       }
     );
 
-    // delete api
+    // update user name or image
+    // ==========================
+    app.patch("/updateUserProfile", verifyToken, async (req, res) => {
+      const { email } = req.query;
+      const { photo, name } = req.body;
+
+      // Check for required fields
+      if (!email || (!photo && !name)) {
+        return res
+          .status(400)
+          .send("Access denied: Missing email or update data");
+      }
+
+      try {
+        const query = { email: email };
+        const user = await usersCollection.findOne(query);
+
+        // Check if user exists
+        if (!user) {
+          return res.status(404).send("User not found");
+        }
+
+        // Prepare update data
+        const update = {};
+        if (photo) update.photo = photo;
+        if (name) update.name = name;
+
+        // Update user data
+        const result = await usersCollection.updateOne(query, { $set: update });
+
+        // Check if update was successful
+        if (result.modifiedCount === 0) {
+          return res
+            .status(400)
+            .send("No changes were made to the user profile");
+        }
+
+        // Successful response
+        res.status(200).send("Profile updated successfully");
+      } catch (error) {
+        console.error("Error updating profile:", error);
+        res.status(500).send("Internal server error");
+      }
+    });
+
     // user delete api
+    // ==========================
     app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -610,6 +680,8 @@ async function run() {
       res.send(result);
     });
 
+    // get payment history
+    // ==========================
     app.get("/paymentHistory", verifyBuyer, verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = { buyer_email: email };
@@ -617,6 +689,8 @@ async function run() {
       res.send(result);
     });
 
+    // post payment history
+    // ==========================
     app.post("/paymentHistory", verifyBuyer, verifyToken, async (req, res) => {
       const notification = req.body;
       const result = await paymentHistoryCollection.insertOne(notification);
@@ -624,6 +698,7 @@ async function run() {
     });
 
     // payment api
+    // ==========================
     app.post(
       "/create-payment-intent",
       verifyBuyer,
