@@ -1,80 +1,97 @@
-# Micro Task Earning Platform
+# Workflow Earning Platform Server
 
-## Description
+## Introduction
 
-This is a micro-tasking and earning platform, inspired by sites like Picoworkers, Clickworker, and SEOClerks. Users can take on tasks, earn coins, and withdraw payments. The platform includes three roles: Worker, Buyer, and Admin.
+The **Workflow Earning Platform Server** is the backend service for the micro-task earning application. It is built using **Node.js and Express**, with **MongoDB** as the database and **Stripe** for payment processing.
 
-## Features
+## Table of Contents
 
-- **Worker**: Complete tasks, submit for review, withdraw coins, and receive notifications.
-- **Buyer**: Create tasks, review submissions, make payments, purchase coins, and report issues.
-- **Admin**: Manage user roles, handle reports, and maintain the system.
+- [Installation](#installation)
+- [Usage](#usage)
+- [Features](#features)
+- [Environment Variables](#environment-variables)
+- [Dependencies](#dependencies)
+- [API Endpoints](#api-endpoints)
+- [Development](#development)
+- [License](#license)
 
-## Getting Started
+## Installation
 
-### Prerequisites
-
-Before you begin, ensure you have the following installed:
-
-- [Node.js](https://nodejs.org/)
-- [MongoDB](https://www.mongodb.com/)
-
-### Installation
+To set up the server locally, follow these steps:
 
 1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/Programming-Hero-Web-Course4/b10a12-server-side-alaminislam34.git
+   ```sh
+   git clone https://github.com/your-repo/workflow-earning-platform-server.git
+   cd workflow-earning-platform-server
    ```
-
-2. Navigate to the project folder:
-
-   ```bash
-   cd your-repo-name
+2. Install dependencies:
+   ```sh
+   npm install
    ```
-
-3. Install the required dependencies:
-
-   ```bash
-   npm install mongodb dotenv nodemon express stripe jwt
-   ```
-
-4. Configure the environment variables:
-
-   - Create a `.env` file and set the following variables:
-     ```bash
-     DB_USER=your_username
-     DB_PASS=your_pass
-     JWT_SECRET=your-secret-key
-     STRIPE_SECRET_KEY=stripe_secret_key
-     ```
-
-5. Run the server:
-   ```bash
+3. Create a `.env` file in the root directory and add the required environment variables (see [Environment Variables](#environment-variables) section).
+4. Start the server:
+   ```sh
    npm start
    ```
 
-### Usage
+## Usage
 
-- **Workers**: Once logged in, workers can view available tasks, complete them, and withdraw earnings.
-- **Buyers**: Buyers can create new tasks, review worker submissions, and make payments.
-- **Admins**: Admins can manage users, oversee task submissions, and ensure smooth platform operation.
+- The server handles user authentication and authorization.
+- It connects to a MongoDB database to store and retrieve user and task data.
+- It processes payments using **Stripe**.
+- The API endpoints allow clients (frontend applications) to interact with the platform.
+
+## Features
+
+✅ RESTful API using **Express.js**  
+✅ Authentication with **JWT**  
+✅ Database management with **MongoDB**  
+✅ Secure payment handling with **Stripe**  
+✅ CORS support for frontend integration
+
+## Environment Variables
+
+Create a `.env` file and add the following:
+
+```env
+DB_USER=YOUR_DATABASE_USERNAME
+DB_PASS=YOUR_DATABASE_PASSWORD
+SECRET_ACCESS_TOKEN=YOUR_SECRET_ACCESS_TOKEN
+STRIPE_SECRET_KEY=YOUR_STRIPE_SECRET_KEY
+```
+
+**Note:** Replace values with actual credentials before running the server.
+
+## Dependencies
+
+The project uses the following major dependencies:
+
+- **Express** (`^4.21.2`) - Web framework
+- **MongoDB** (`^6.12.0`) - Database client
+- **JWT (jsonwebtoken)** (`^9.0.2`) - Authentication
+- **CORS** (`^2.8.5`) - Cross-origin requests
+- **dotenv** (`^16.4.7`) - Environment variables
+- **Stripe** (`^17.5.0`) - Payment processing
 
 ## API Endpoints
 
-### `GET /allUsers`
+| Method | Endpoint     | Description                  |
+| ------ | ------------ | ---------------------------- |
+| POST   | `/login`     | User login                   |
+| POST   | `/register`  | User registration            |
+| GET    | `/tasks`     | Fetch all tasks              |
+| POST   | `/tasks`     | Create a new task            |
+| DELETE | `/tasks/:id` | Delete a task                |
+| POST   | `/payment`   | Process a payment via Stripe |
 
-- **Description**: Fetches all users based on their role (e.g., "Worker").
-- **Query Parameters**:
-  - `role`: Specify the role (e.g., "Worker").
-- **Response**:
-  ```json
-  [
-    {
-      "id": "12345",
-      "name": "John Doe",
-      "role": "Worker",
-      "status": "Active"
-    }
-  ]
-  ```
+## Development
+
+Run the server with **nodemon** for hot reloading:
+
+```sh
+npm run dev
+```
+
+## License
+
+This project is **private** and not open-source.
