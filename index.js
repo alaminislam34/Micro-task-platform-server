@@ -6,6 +6,7 @@ const app = express();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const uploadImage = require("./uploadImage");
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -76,6 +77,7 @@ async function run() {
     const paymentHistoryCollection = client
       .db("PaymentDB")
       .collection("payments");
+    const reviewCollection = client.db("ReviewDB").collection("reviews");
 
     // verify admin
     const verifyAdmin = async (req, res, next) => {
@@ -261,6 +263,12 @@ async function run() {
       }
     });
 
+    // review get api
+    app.get("/reviews", (req, res) => {
+      const result = reviewCollection.find().toArray();
+      res.send(result);
+    });
+
     // post user api
     // ==========================
     app.post("/user", async (req, res) => {
@@ -364,6 +372,16 @@ async function run() {
       const result = await withdrawalsCollection.insertOne(postRequest);
       res.send(result);
     });
+
+    // review post api
+    app.post("/postReview", async (req, res) => {
+      const review = req.body;
+      const result = await reviewCollection.insertOne(review);
+      res.send(result);
+    });
+
+    // image upload
+    app.use("/upload", uploadImage);
 
     // user coin modify api
     // ==========================
